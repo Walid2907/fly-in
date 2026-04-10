@@ -1,0 +1,6 @@
+.venv
+.idea
+.obsidian
+__pycache__
+*.pyc
+.mypy_cache
