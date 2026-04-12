@@ -39,5 +39,6 @@ clean:
 	@find . -type d -name "*.egg-info" -exec rm -r {} +
 	@rm -rf dist/ build/
 	@rm -rf *.egg-info
+	@rm -rf .idea
 
 .PHONY: all install run debug lint lint-strict clean build
