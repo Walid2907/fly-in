@@ -76,6 +76,7 @@ class Graph:
         self.nb_drones: int = data.nb_drones
         self.start: Zone = self.find_start(data)
         self.end: Zone = self.find_end(data)
+        # a dict for the node and what node it next to it
         self.adjacency: Dict[Zone, List[Tuple[Zone, Connection]]] = defaultdict(list)
         self.make_Edges(data)
 
@@ -120,16 +121,24 @@ class Graph:
         return 1  # normal and priority both cost 1 turn
 
     # test path finder
-    def get_path(self, start, end, path=[]):
-        path = path + [start]
-        if start == end:
-            return [path]
-        elif start not in self.edges_dict:
-            return []
-        paths = []
-        for node in self.edges_dict[start]:
-            if node not in path:
-                new_path = self.get_path(node, end, path)
-                for p in new_path:
-                    paths.append(p)
-        return paths
+    def dijkstra(self, start: Zone, end: Zone) -> Optional[List[Zone]]:
+        import heapq
+        # (cost, zone_name) → to avoid comparing Zone objects
+        heap: List[Tuple[int, str]] = [(0, start.name)]
+        costs: Dict[str, int] = {start.name: 0}
+        prev: Dict[str, Optional[str]] = {start.name: None}
+
+        while heap:
+            cost, name = heapq.heappop(heap)
+            zone = self.zones[name]  # you'll need access to zones dict
+
+            if zone == end:
+                return self._reconstruct_path(prev, start, end)
+
+            for neighbor, conn in self.get_neighbors(zone):
+                new_cost = cost + self.movement_cost(neighbor)
+                if neighbor.name not in costs or new_cost < costs[neighbor.name]:
+                    costs[neighbor.name] = new_cost
+                    prev[neighbor.name] = name
+                    heapq.heappush(heap, (new_cost, neighbor.name))
+        return None

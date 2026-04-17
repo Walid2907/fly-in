@@ -13,5 +13,6 @@ if __name__ == "__main__":
         # build my Graph
         graph = Graph(data)
         pprint(graph.adjacency[data.zones["goal"]])
+        pprint(graph.dijkstra(data.zones["start"], ))
     except Exception:
         pass
