@@ -1,10 +1,27 @@
 from typing import Dict, List, Any, Optional
-from classes import ZoneType, Zone, Connection, Data, MapError
+from models import ZoneType, Zone, Connection, Data 
+from Errors import MapError
 
 
 class Map_parser:
     def __init__(self, file_name: str):
         self.file_name = file_name
+
+    def extract_metadata(self, value: str, line_num: int) -> tuple[str, dict]:
+        metadata: Dict[str, Any] = {}
+
+        if "[" in value:
+            base, attrs = value.split("[", 1)
+
+            if not attrs.endswith("]"):
+                raise MapError(f"Line {line_num}: Unclosed metadata bracket")
+
+            attrs = attrs.removesuffix("]").strip()
+            metadata = self.parse_metadata(attrs, line_num)
+        else:
+            base = value.strip()
+
+        return base.strip(), metadata
 
     def parse_metadata(self, attrs_str: str, line_num: int) -> Dict[str, Any]:
         attrs_dict: Dict[str, Any] = {}
@@ -27,18 +44,12 @@ class Map_parser:
         elif hub_type == "end_hub":
             is_end = True
 
-        if "[" in value:
-            zone, attrs = value.split("[", 1)
-            if not attrs.endswith("]"):
-                raise MapError(f"Line {line_num}: Unclosed metadata bracket")
-            attrs = attrs.removesuffix("]").strip()
-            metadata = self.parse_metadata(attrs, line_num)
-        else:
-            zone = value.strip()
+        zone, metadata = self.extract_metadata(value, line_num)
 
         zone_info = zone.strip().split()
         if len(zone_info) != 3:
-            raise MapError(f"Line {line_num}: Expected 'name x y', got '{value.strip()}'")
+            raise MapError(f"Line {line_num}: "
+                           f"Expected 'name x y', got '{value.strip()}'")
 
         zone_name, xs, ys = zone_info
         try:
@@ -49,11 +60,14 @@ class Map_parser:
         try:
             zone_type = ZoneType(str(metadata.get("zone", "normal")))
         except ValueError:
-            raise MapError(f"Line {line_num}: Invalid zone type '{str(metadata.get('zone', 'normal'))}'. Must be one of {[e.value for e in ZoneType]}")
+            raise MapError(f"Line {line_num}: Invalid zone type "
+                           f"'{str(metadata.get('zone', 'normal'))}'. "
+                           f"Must be one of {[e.value for e in ZoneType]}")
 
         max_drones = metadata.get("max_drones", 1)
         if not isinstance(max_drones, int) or max_drones < 1:
-            raise MapError(f"Line {line_num}: max_drones must be a positive intger")
+            raise MapError(f"Line {line_num}: "
+                           f"max_drones must be a positive intger")
 
         if metadata.get("color", None) is not None:
             color = str(metadata.get("color", None))
@@ -72,20 +86,15 @@ class Map_parser:
         )
 
     # parsing the connection part
-    def parse_connection(self, value: str, line_num: int) -> tuple[str, str, int]:
+    def parse_connection(self, value: str,
+                         line_num: int) -> tuple[str, str, int]:
         # to store the metadata as key: value
         metadata: Dict[str, Any] = {}
-        if "[" in value:
-            zones, attrs = value.split("[", 1)
-            if not attrs.endswith("]"):
-                raise MapError(f"Line {line_num}: Unclosed metadata bracket")
-            attrs = attrs.removesuffix("]").strip()
-            metadata = self.parse_metadata(attrs, line_num)  # to add
-        else:
-            zones = value.strip()
+        zones, metadata = self.extract_metadata(value, line_num)
 
         if "-" not in zones:
-            raise MapError(f"Line {line_num}: Connection must be 'zone1-zone2', got '{value}'")
+            raise MapError(f"Line {line_num}: "
+                           f"Connection must be 'zone1-zone2', got '{value}'")
         # simple parse add the metadata parse first
         zone1, zone2 = zones.split("-", 1)
         zone1, zone2 = zone1.strip(), zone2.strip()
@@ -94,12 +103,10 @@ class Map_parser:
             raise MapError(f"Line {line_num}: Connection has empty zone name")
         max_link_capacity = metadata.get("max_link_capacity", 1)
         if not isinstance(max_link_capacity, int) or max_link_capacity < 1:
-            raise MapError(f"Line {line_num}: max_link_capacity must be a positive integer")
+            raise MapError(f"Line {line_num}: "
+                           f"max_link_capacity must be a positive integer")
 
         return zone1, zone2, max_link_capacity
-    
-    def make_Edges(connection: List[Connection], zones: Dict[str, Zone]):
-        pass
 
     # main parsing manager
     def parser(self) -> Data:
@@ -109,7 +116,7 @@ class Map_parser:
         seen_connections: set[frozenset] = set()
         start_count = 0
         end_count = 0
-        with open(self.file_name, "r", encoding="utf-8") as file:
+        with (open(self.file_name, "r", encoding="utf-8") as file):
             for line_num, line in enumerate(file, start=1):
                 line = line.strip()
                 if not line or line.startswith("#"):
@@ -124,17 +131,23 @@ class Map_parser:
 
                 if key == "nb_drones":
                     if not value.isdigit() or int(value) < 1:
-                        raise MapError(f"Line {line_num}: nb_drones must be a positive integer")
+                        raise MapError(f"Line {line_num}: "
+                                       f"nb_drones must be a positive integer")
                     nb_drones = int(value)
 
                 elif key == "connection":
-                    zone1, zone2, max_link_capacity = self.parse_connection(value, line_num)
+                    zone1, zone2, max_link_capacity = (
+                        self.parse_connection(value, line_num)
+                    )
                     for zone_name in (zone1, zone2):
                         if zone_name not in zones:
-                            raise MapError(f"Zone unknown '{zone_name}' in Line {line_num}")
+                            raise MapError(f"Zone unknown "
+                                           f"'{zone_name}' in Line {line_num}")
                     conn_key = frozenset([zone1, zone2])
                     if conn_key in seen_connections:
-                        raise MapError(f"Line {line_num}: Duplicate connection '{zone1}-{zone2}'")
+                        raise MapError(f"Line {line_num}: "
+                                       f"Duplicate connection "
+                                       f"'{zone1}-{zone2}'")
                     seen_connections.add(conn_key)
                     connections.append(Connection(
                             zone1=zones[zone1],
@@ -145,21 +158,25 @@ class Map_parser:
                     zone = self.parse_zone(key, value, line_num)
 
                     if zone.name in zones:
-                        raise MapError(f"Line {line_num}: Duplicated zone name '{zone.name}'")
+                        raise MapError(f"Line {line_num}: "
+                                       f"Duplicated zone name '{zone.name}'")
 
                     if key == "start_hub":
                         start_count += 1
                         if start_count > 1:
-                            raise MapError(f"Line {line_num}: Multiples start zone")
+                            raise MapError(f"Line {line_num}: "
+                                           f"Multiples start zone")
 
                     elif key == "end_hub":
                         end_count += 1
                         if end_count > 1:
-                            raise MapError(f"Line {line_num}: Multiples end zone")
+                            raise MapError(f"Line {line_num}: "
+                                           f"Multiples end zone")
 
                     zones[zone.name] = zone
                 else:
-                    raise MapError(f"Line {line_num}: unknown key '{key}'")
+                    raise MapError(f"Line {line_num}: "
+                                   f"unknown key '{key}'")
 
         if nb_drones is None:
             raise MapError("Missing 'nb_drones' definition")
